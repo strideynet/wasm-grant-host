@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/strideynet/wasm-grant-host/modulesdk/types"
 )
@@ -19,7 +19,7 @@ type Engine struct {
 	wasmBytes []byte
 }
 
-func (e *Engine) Evaluate(ctx context.Context, req types.Request) (*types.Response, error) {
+func (e *Engine) Evaluate(ctx context.Context, req *types.Request) (*types.Response, error) {
 
 	// These bits could be cached and reused across multiple evaluations
 	slog.Info("Starting Runtime standup")
@@ -40,7 +40,7 @@ func (e *Engine) Evaluate(ctx context.Context, req types.Request) (*types.Respon
 	slog.Info("Starting request handling")
 	start := time.Now()
 
-	reqBytes, err := json.Marshal(req)
+	reqBytes, err := proto.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
@@ -48,14 +48,21 @@ func (e *Engine) Evaluate(ctx context.Context, req types.Request) (*types.Respon
 	// TODO: Explore message passing with gRPC?? or at least proto defined
 	// messages...
 
+	stderrLog, err := os.Create("module_stderr.log")
+	if err != nil {
+		return nil, fmt.Errorf("opening stderr log file: %w", err)
+	}
+	defer stderrLog.Close()
+
 	input := bytes.NewReader(reqBytes)
 	output := bytes.NewBuffer(nil)
 	slog.Info("Starting invocation of wasm")
 	wasmStart := time.Now()
 	modConfig := wazero.NewModuleConfig().
-		WithStdout(output).    // Used to capture response
-		WithStderr(os.Stderr). // Redirect to some kind of wrapped logger
-		WithStdin(input)       // Used to feed in input
+		WithStdout(output). // Used to capture response
+		WithStderr(stderrLog). // Used to capture logging from wasm module
+		WithStdin(input). // Used to feed in input
+		WithSysWalltime() // Provides module access to time
 
 	// Instantiate the guest Wasm into the same runtime. It exports the `add`
 	// function, implemented in WebAssembly.
@@ -66,7 +73,7 @@ func (e *Engine) Evaluate(ctx context.Context, req types.Request) (*types.Respon
 	slog.Info("Finished invocation of  wasm", "duration", time.Since(wasmStart))
 
 	res := types.Response{}
-	err = json.Unmarshal(output.Bytes(), &res)
+	err = proto.Unmarshal(output.Bytes(), &res)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}

@@ -17,11 +17,13 @@ func main() {
 	}
 
 	eng := NewEngine(byteCode)
-	res, err := eng.Evaluate(ctx, types.Request{
-		Target: []string{"test"},
+	res, err := eng.Evaluate(ctx, &types.Request{
+		Target: &types.Target{
+			Name: "example",
+		},
 	})
 	if err != nil {
-		panic(err)
+		slog.Error("Error evaluating request", "error", err)
 	}
 	slog.Info("Received response from engine", "response", res)
 }

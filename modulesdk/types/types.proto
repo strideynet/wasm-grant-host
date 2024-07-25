@@ -1,0 +1,21 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/strideynet/wasm-grant-host/modulesdk/types";
+
+message Target {
+  string name = 1;
+}
+
+message Subject {
+  string name = 1;
+}
+
+message Request {
+  Target target = 1;
+  Subject subject = 2;
+}
+
+message Response {
+  bool allow = 1;
+}

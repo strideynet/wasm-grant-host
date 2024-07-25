@@ -1,33 +1,31 @@
 package modulesdk
 
 import (
-	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/strideynet/wasm-grant-host/modulesdk/types"
 )
 
-var Log = slog.With("component", "module")
-
-type HandleFunc func(types.Request) (*types.Response, error)
+type HandleFunc func(*types.Request, *slog.Logger) (*types.Response, error)
 
 func Handle(f HandleFunc) {
 	reqBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		panic(err)
 	}
-	req := types.Request{}
-	if err := json.Unmarshal(reqBytes, &req); err != nil {
+	req := &types.Request{}
+	if err := proto.Unmarshal(reqBytes, req); err != nil {
 		panic(err)
 	}
-
-	res, err := f(req)
+	res, err := f(req, slog.Default())
 	if err != nil {
 		panic(err)
 	}
-	resBytes, err := json.Marshal(res)
+	resBytes, err := proto.Marshal(res)
 	if err != nil {
 		panic(err)
 	}
